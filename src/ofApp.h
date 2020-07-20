@@ -21,17 +21,22 @@ class ofApp : public ofBaseApp{
 	ofTexture texIR;
 	ofTexture texSkeleton;
 
-	cv::Mat greyImg;
-	cv::Mat colorImg;
+	cv::Mat matGrey;
+	cv::Mat matRGB;
+	cv::Mat matBodyIdx;
 
 	ofImage frame;
 
 	ofxPanel panel;
 
-	inline void depthToOf(const cv::Mat& src, ofImage& img);
-	inline void colorToOf(const cv::Mat& src, ofImage& img);
-	inline void bodyIndexToOf(const cv::Mat& src, ofImage& img);
-	inline void convertTo8Bit(cv::Mat& img);
+	void updateDepth();
+	void updateRGB();
+	void updateBodyIdx();
+
+	void cvtTo8Bit(cv::Mat& img);
+	void reducePixels(cv::Mat& img);
+	void toOf(const cv::Mat& src, ofImage& img);
+	void copyRect(cv::Mat& src, cv::Mat& dst, int sx, int sy, int w, int h, int dx, int dy);
 
 	void drawTextureAtRowAndColumn(const std::string& title,
 		const ofTexture& tex,

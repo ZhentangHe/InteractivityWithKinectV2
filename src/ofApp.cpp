@@ -2,61 +2,106 @@
 
 // convert full 16-bits depth range to 8 bits
 // use setDepth(false) for this to work
-inline void ofApp::depthToOf(const cv::Mat& src, ofImage& img) {
+void ofApp::updateDepth() {
 
-    src.convertTo(greyImg, CV_8UC1, 1.0 / 256.0);
-    ofPixels pix;
-    pix.setFromExternalPixels(greyImg.data, greyImg.cols, greyImg.rows, greyImg.channels());
-    img.setFromPixels(pix);
-    img.update();
+    kinect.setDepth(false);
+    kinect.depthImage.convertTo(matGrey, CV_8UC1, 1.0 / 256.0);
+    toOf(matGrey, frame);
 }
 
-inline void ofApp::colorToOf(const cv::Mat& src, ofImage& img) {
+//This function converts a BGRA mat into an ofImage.
+//Use NtKinect::setRGB() for this to work.
+void ofApp::updateRGB() {
 
-    ofPixels pix;
+    kinect.setRGB();
+    cv::cvtColor(kinect.rgbImage, matRGB, CV_BGRA2RGB, 3);
+    cvtTo8Bit(matRGB);
+    //colorReduce(matRGB);
+    //matRGB = quantizeImage(matRGB, 3);
+    reducePixels(matRGB);
+    toOf(matRGB, frame);
 
-    //convert
-    cv::cvtColor(src, colorImg, CV_BGR2RGB, 3);
-
-    //reduce color space
-    //colorReduce(colorImg);
-    //colorImg = quantizeImage(colorImg, 3);
-    convertTo8Bit(colorImg);
-
-    //reduce pixels
-    cv::Mat temp;
-    cv::resize(colorImg, temp, cv::Size(width / 2, height / 2), CV_INTER_LINEAR);
-    cv::resize(temp, colorImg, cv::Size(width, height), CV_INTER_NN);
-
-    pix.setFromExternalPixels(colorImg.data, colorImg.cols, colorImg.rows, colorImg.channels());
-    img.setFromPixels(pix);
-    img.update();
 }
 
-inline void ofApp::bodyIndexToOf(const cv::Mat& src, ofImage& img) {
-    cv::cvtColor(src, colorImg, CV_BGR2RGB, 3);
+//This function converts a BGRA mat into an ofImage.
+//Use NtKinect::setRGB() and NtKinect::setBodyIndex() for this to work.
+void ofApp::updateBodyIdx() {
 
-    convertTo8Bit(colorImg);
+    cv::Mat matBg, matFg;
 
-    cv::Mat temp;
-    cv::resize(colorImg, temp, cv::Size(width / 2, height / 2), CV_INTER_LINEAR);
-    cv::resize(temp, colorImg, cv::Size(width, height), CV_INTER_NN);
+    kinect.setRGB();
+    cv::cvtColor(kinect.rgbImage, matFg, cv::COLOR_BGRA2BGR);
+    matBg = cv::Mat::zeros(kinect.rgbImage.rows, kinect.rgbImage.cols, CV_8UC3);
+    kinect.setDepth();
+    kinect.setBodyIndex();
 
-    ofPixels pix;
-    pix.setFromExternalPixels(colorImg.data, colorImg.cols, colorImg.rows, colorImg.channels());
-    img.setFromPixels(pix);
-    img.update();
+    for (size_t y = 0; y < kinect.bodyIndexImage.rows; y++) {
+        for (size_t x = 0; x < kinect.bodyIndexImage.cols; x++) {
+            UINT16 d = kinect.depthImage.at<UINT16>(y, x);
+            uchar bi = kinect.bodyIndexImage.at<uchar>(y, x);
+            if (bi == 255) continue;
+            ColorSpacePoint cp;
+            DepthSpacePoint dp; 
+            dp.X = x; 
+            dp.Y = y;
+            kinect.coordinateMapper->MapDepthPointToColorSpace(dp, d, &cp);
+            int cx = (int)cp.X, cy = (int)cp.Y;
+            copyRect(matFg, matBg, cx - 2, cy - 2, 4, 4, cx - 2, cy - 2);
+        }
+    }
+
+    cv::cvtColor(matBg, matBodyIdx, CV_BGRA2RGB, 3);
+    cvtTo8Bit(matBodyIdx);
+    reducePixels(matBodyIdx);
+    toOf(matBodyIdx, frame);
+
 }
 
-//convert img into 8 bit truecolor RRRGGGBB.
-inline void ofApp::convertTo8Bit(cv::Mat& img) {
+#pragma region Utils
+//This function converts an image into 8 bit truecolor(RRRGGGBB).
+void ofApp::cvtTo8Bit(cv::Mat& img) {
+    //TODO: set palette
     for (int i = 0; i < img.rows; i++) {
         for (int j = 0; j < img.cols; j++) {
             img.at<cv::Vec3b>(i, j)[0] = (img.at<cv::Vec3b>(i, j)[0] >> 6) << 6;
             img.at<cv::Vec3b>(i, j)[1] = (img.at<cv::Vec3b>(i, j)[1] >> 6) << 6;
-            img.at<cv::Vec3b>(i, j)[2] = (img.at<cv::Vec3b>(i, j)[2] >> 6) << 6;
+            img.at<cv::Vec3b>(i, j)[2] = (img.at<cv::Vec3b>(i, j)[2] >> 5) << 5;
         }
     }
+}
+
+//This function scale an image down and up.
+void ofApp::reducePixels(cv::Mat& img) {
+
+    cv::resize(img, img, cv::Size(width / 2, height / 2), CV_INTER_LINEAR);
+    cv::resize(img, img, cv::Size(width, height), CV_INTER_NN);
+}
+
+//This function converts a RGB-Mat to corresponding ofImage.
+void ofApp::toOf(const cv::Mat& src, ofImage& img) {
+
+    ofPixels pix;
+    pix.setFromExternalPixels(src.data, src.cols, src.rows, src.channels());
+    img.setFromPixels(pix);
+    img.update();
+}
+
+void ofApp::copyRect(cv::Mat& src, cv::Mat& dst, int sx, int sy, int w, int h, int dx, int dy) {
+    if (sx + w < 0 || sx >= src.cols || sy + h < 0 || sy >= src.rows) return;
+    if (sx < 0) { w += sx; dx -= sx; sx = 0; }
+    if (sx + w > src.cols) w = src.cols - sx;
+    if (sy < 0) { h += sy; dy -= sy; sy = 0; }
+    if (sy + h > src.rows) h = src.rows - sy;
+
+    if (dx + w < 0 || dx >= dst.cols || dy + h < 0 || dy >= dst.rows) return;
+    if (dx < 0) { w += dx; sx -= dx; dx = 0; }
+    if (dx + w > dst.cols) w = dst.cols - dx;
+    if (dy < 0) { h += dy; sy -= dy; dy = 0; }
+    if (dy + h > dst.rows) h = dst.rows - dy;
+
+    cv::Mat roiSrc(src, cv::Rect(sx, sy, w, h));
+    cv::Mat roiDst(dst, cv::Rect(dx, dy, w, h));
+    roiSrc.copyTo(roiDst);
 }
 
 void ofApp::drawTextureAtRowAndColumn(const std::string& title, const ofTexture& tex, int row, int column) {
@@ -93,6 +138,8 @@ void ofApp::drawTextureAtRowAndColumn(const std::string& title, const ofTexture&
         targetRectangle.getPosition() + glm::vec3(14, 20, 0));
 }
 
+#pragma endregion
+
 //--------------------------------------------------------------
 void ofApp::setup() {
 
@@ -100,15 +147,12 @@ void ofApp::setup() {
 
 //--------------------------------------------------------------
 void ofApp::update() {
-    kinect.setRGB();
-    colorToOf(kinect.rgbImage, frame);
 
-    //kinect.setDepth(false);
-    //depthToOf(kinect.depthImage, frame);
+    //updateDepth();
 
-    //kinect.setRGB();
-    //kinect.setBodyIndex();
-    //bodyIndexToOf(kinect.bodyIndexImage, frame);
+    updateRGB();
+
+    //updateBodyIdx();
 }
 
 //--------------------------------------------------------------
