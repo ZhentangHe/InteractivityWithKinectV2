@@ -21,17 +21,19 @@ class ofApp : public ofBaseApp{
 	ofTexture texIR;
 	ofTexture texSkeleton;
 
-	cv::Mat matGrey;
+	cv::Mat matGray;
 	cv::Mat matRGB;
 	cv::Mat matBodyIdx;
 
 	ofImage frame;
 
-	ofxPanel panel;
+	ofxIntSlider edgeThresh1, edgeThresh2;
+	ofxPanel panel, gui;
 
 	void updateDepth();
 	void updateRGB();
 	void updateBodyIdx();
+	void stylize();
 
 	void cvtTo8Bit(cv::Mat& img);
 	void reducePixels(cv::Mat& img);

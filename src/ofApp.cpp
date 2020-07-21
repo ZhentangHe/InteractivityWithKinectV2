@@ -1,12 +1,13 @@
 #include "ofApp.h"
 
+#pragma region Update
 // convert full 16-bits depth range to 8 bits
 // use setDepth(false) for this to work
 void ofApp::updateDepth() {
 
     kinect.setDepth(false);
-    kinect.depthImage.convertTo(matGrey, CV_8UC1, 1.0 / 256.0);
-    toOf(matGrey, frame);
+    kinect.depthImage.convertTo(matGray, CV_8UC1, 1.0 / 256.0);
+    toOf(matGray, frame);
 }
 
 //This function converts a BGRA mat into an ofImage.
@@ -19,6 +20,7 @@ void ofApp::updateRGB() {
     //colorReduce(matRGB);
     //matRGB = quantizeImage(matRGB, 3);
     reducePixels(matRGB);
+    stylize();
     toOf(matRGB, frame);
 
 }
@@ -41,8 +43,8 @@ void ofApp::updateBodyIdx() {
             uchar bi = kinect.bodyIndexImage.at<uchar>(y, x);
             if (bi == 255) continue;
             ColorSpacePoint cp;
-            DepthSpacePoint dp; 
-            dp.X = x; 
+            DepthSpacePoint dp;
+            dp.X = x;
             dp.Y = y;
             kinect.coordinateMapper->MapDepthPointToColorSpace(dp, d, &cp);
             int cx = (int)cp.X, cy = (int)cp.Y;
@@ -56,6 +58,49 @@ void ofApp::updateBodyIdx() {
     toOf(matBodyIdx, frame);
 
 }
+
+void ofApp::stylize() {
+
+    //1. simple canny
+
+    cv::Mat gray, dst, detected_edges, addweight;
+    cv::cvtColor(matRGB, gray, cv::COLOR_RGB2GRAY);
+    blur(gray, gray, cv::Size(3, 3));
+    Canny(gray, detected_edges, edgeThresh1, edgeThresh2, 3);
+    
+    dst = cv::Scalar::all(0);
+    
+    matRGB.copyTo(dst, detected_edges); // copy part of src image according the canny output, canny is used as mask
+    cvtColor(detected_edges, detected_edges, CV_GRAY2BGR); // convert canny image to bgr
+    addWeighted(matRGB, 0.5, detected_edges, 0.5, 0.0, addweight); // blend src image with canny image
+    matRGB += detected_edges; // add src image with canny image
+    
+    addweight.copyTo(matRGB);
+
+    //2. taking too much time
+
+    //cv::Mat segmented, gray, edges, edgesRgb;
+    //cv::pyrMeanShiftFiltering(matRGB, segmented, 15, 40);
+    //cv::cvtColor(segmented, gray, cv::COLOR_RGB2GRAY);
+    //cv::Canny(gray, edges, 150, 150);
+    //cv::cvtColor(edges, edgesRgb, cv::COLOR_GRAY2RGB);
+    //matRGB -= edgesRgb;
+
+    //3. similar to Bilateral Filtering but faster (still slow for 1080p 60fps)
+
+    //cv::edgePreservingFilter(matRGB, matRGB, cv::RECURS_FILTER);
+
+    //4. stylization (very slow)
+
+    //cv::stylization(matRGB, matRGB);
+
+    //5. pencil sketch (little bit latency)
+
+    //cv::pencilSketch(matRGB, matGray, matRGB);
+
+}
+
+#pragma endregion
 
 #pragma region Utils
 //This function converts an image into 8 bit truecolor(RRRGGGBB).
@@ -137,17 +182,18 @@ void ofApp::drawTextureAtRowAndColumn(const std::string& title, const ofTexture&
     ofDrawBitmapStringHighlight(title,
         targetRectangle.getPosition() + glm::vec3(14, 20, 0));
 }
-
 #pragma endregion
 
+#pragma region ofApp
 //--------------------------------------------------------------
 void ofApp::setup() {
-
+    gui.setup();
+    gui.add(edgeThresh1.setup("edgeThresh1", 60, 1, 500));
+    gui.add(edgeThresh2.setup("edgeThresh2", 100, 1, 500));
 }
 
 //--------------------------------------------------------------
 void ofApp::update() {
-
     //updateDepth();
 
     updateRGB();
@@ -158,6 +204,7 @@ void ofApp::update() {
 //--------------------------------------------------------------
 void ofApp::draw() {
     drawTextureAtRowAndColumn("Kinect", frame.getTexture(), 0, 0);
+    gui.draw();
 }
 
 //--------------------------------------------------------------
@@ -176,7 +223,7 @@ void ofApp::keyReleased(int key) {
 }
 
 //--------------------------------------------------------------
-void ofApp::mouseMoved(int x, int y ) {
+void ofApp::mouseMoved(int x, int y) {
 
 }
 
@@ -216,6 +263,7 @@ void ofApp::gotMessage(ofMessage msg) {
 }
 
 //--------------------------------------------------------------
-void ofApp::dragEvent(ofDragInfo dragInfo) { 
+void ofApp::dragEvent(ofDragInfo dragInfo) {
 
 }
+#pragma endregion
