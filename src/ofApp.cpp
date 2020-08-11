@@ -103,13 +103,13 @@ void ofApp::updateBodyIdx() {
 
 void ofApp::rewriteCode() {
 
-    cv::Mat resized;
-    
+    cv::Mat resized;    
     pointCloud.clear();
     kinect.setRGB();
-    cv::resize(kinect.rgbImage, resized, cv::Size(512, 424));
+    matRGB = kinect.rgbImage.clone();
     kinect.setDepth();
     kinect.setBodyIndex();
+    cv::resize(kinect.rgbImage, resized, cv::Size(kinect.bodyIndexImage.rows, kinect.bodyIndexImage.cols));
 
     for (size_t y = 0; y < kinect.bodyIndexImage.rows; y++) {
         for (size_t x = 0; x < kinect.bodyIndexImage.cols; x++) {
@@ -121,32 +121,29 @@ void ofApp::rewriteCode() {
             dp.X = x;
             dp.Y = y;
             kinect.coordinateMapper->MapDepthPointToCameraSpace(dp, d, &cp);
-            //cout << y <<" "<< cp.X << ", " << cp.Y << ", " << cp.Z << endl;
-            pointCloud.addVertex(ofVec3f(cp.X * 1000, cp.Y * 1000, cp.Z * 1000));
-            pointCloud.addColor(ofFloatColor(resized.at<cv::Vec3f>(y, x)[0] / 255., resized.at<cv::Vec3f>(y, x)[1] / 255., resized.at<cv::Vec3f>(y, x)[2] / 255.));
-
-            //ColorSpacePoint cp;
-            //DepthSpacePoint dp;
-            //dp.X = x;
-            //dp.Y = y;
-            //kinect.coordinateMapper->MapDepthPointToColorSpace(dp, d, &cp);
-            //int cx = (int)cp.X, cy = (int)cp.Y;
-            //copyRect(matFg, matBg, cx - 2, cy - 2, 4, 4, cx - 2, cy - 2);
+            pointCloud.addVertex(ofVec3f(cp.X * 1000, cp.Y * 1000, cp.Z * -1000));
+            //TODO: need extra vector to store original indices
+            //sth is wrong, need to determine indices
+            //pointCloud.addColor(ofFloatColor(resized.at<cv::Vec3f>(y, x)[0] / 255., resized.at<cv::Vec3f>(y, x)[1] / 255., resized.at<cv::Vec3f>(y, x)[2] / 255.));
+            //cout << resized.at<cv::Vec3f>(y, x)[0] << ", "
+            //    << resized.at<cv::Vec3f>(y, x)[1] << ", "
+            //    << resized.at<cv::Vec3f>(y, x)[2] << endl;
         }
     }
-    //cv::cvtColor(matBg, matBodyIdx, CV_BGRA2RGB, 3);
-    //cvtTo8Bit(matBodyIdx);
-    //reducePixels(matBodyIdx);
 
-    //int erosion_size = 1;
-    //auto element = cv::getStructuringElement(cv::MORPH_CROSS,
-    //    cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
-    //    cv::Point(erosion_size, erosion_size));
-    //cv::erode(matBodyIdx, matBodyIdx, element, cv::Point(-1, -1), 1, 0, cv::Scalar(0, 0, 0));
+    //for (size_t y = 0; y < kinect.bodyIndexImage.rows; y++) {
+    //    for (size_t x = 0; x < kinect.bodyIndexImage.cols; x++) {
+    //        UINT16 d = kinect.depthImage.at<UINT16>(y, x);
+    //        uchar bi = kinect.bodyIndexImage.at<uchar>(y, x);
+    //        if (bi == 255) continue;
+    //        if (x % 2 == 0) {
+    //            pointCloud.addIndex(0);
+    //        }
+    //        else {
 
-    //getUniqueColors(matBodyIdx);
-    //stylize();
-    //toOf(matBodyIdx, frame);
+    //        }
+    //    }
+    //}
 
 }
 
@@ -306,9 +303,8 @@ void ofApp::update() {
 void ofApp::draw() {
     light.enable();
     cam.begin();
-    ofDrawCylinder(10,20);
     if (pointCloud.getNumVertices() > 0)
-        pointCloud.drawVertices();
+        pointCloud.drawWireframe();
     cam.end();
     light.disable();
 
