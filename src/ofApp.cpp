@@ -5,8 +5,11 @@
 // use setDepth(false) for this to work
 void ofApp::updateDepth() {
 
-    kinect.setDepth(false);
-    kinect.depthImage.convertTo(matGray, CV_8UC1, 1.0 / 256.0);
+    kinect.setDepth(false);//mapped to the luminance of the black and white image 
+                           //of 0 (black) to 65535 (white) with the distance of 0 mm to 4500 mm.
+    
+    kinect.depthImage.convertTo(matGray, CV_8UC1, 255. / 4500.);
+    //kinect.depthImage.convertTo(matGray, CV_8UC1, 1. / 257.);
     toOf(matGray, frame);
 }
 
@@ -25,6 +28,37 @@ void ofApp::updateRGB() {
 
 }
 
+auto getUniqueColors(cv::Mat& img) {
+
+    cv::Mat im;
+    cv::resize(img, im, cv::Size(8, 8));
+    // partition wants a vector, so we need a copy ;(
+    cv::Vec3b* p = im.ptr<cv::Vec3b>();
+    vector<cv::Vec3b> pix(p, p + im.total());
+
+    // now cluster:
+    //vector<int> labels;
+    //int unique = cv::partition(pix, labels,
+    //    [](auto a, auto b) { return a == b; });
+    //    [](auto a, auto b) { return cv::norm(a, b) < 32; });
+
+    sort(pix.begin(), pix.end(), [](auto a, auto b) {
+        if (a[0] == b[0])
+            if (a[1] == b[1])
+                return a[2] < b[2];
+            else return a[1] < b[1];
+        else return a[0] < b[0]; });
+
+    pix.erase(unique(pix.begin(), pix.end()), pix.end());
+
+    return pix;
+
+    // debug output
+    //cv::Mat lm = cv::Mat(labels).reshape(1, im.rows);
+    //cout << lm << endl;
+    //cout << unique << " unique colors" << endl;
+}
+
 //This function converts a BGRA mat into an ofImage.
 //Use NtKinect::setRGB() and NtKinect::setBodyIndex() for this to work.
 void ofApp::updateBodyIdx() {
@@ -36,7 +70,6 @@ void ofApp::updateBodyIdx() {
     matBg = cv::Mat::zeros(kinect.rgbImage.rows, kinect.rgbImage.cols, CV_8UC3);
     kinect.setDepth();
     kinect.setBodyIndex();
-
     for (size_t y = 0; y < kinect.bodyIndexImage.rows; y++) {
         for (size_t x = 0; x < kinect.bodyIndexImage.cols; x++) {
             UINT16 d = kinect.depthImage.at<UINT16>(y, x);
@@ -55,7 +88,65 @@ void ofApp::updateBodyIdx() {
     cv::cvtColor(matBg, matBodyIdx, CV_BGRA2RGB, 3);
     cvtTo8Bit(matBodyIdx);
     reducePixels(matBodyIdx);
+
+    //int erosion_size = 1;
+    //auto element = cv::getStructuringElement(cv::MORPH_CROSS,
+    //    cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
+    //    cv::Point(erosion_size, erosion_size));
+    //cv::erode(matBodyIdx, matBodyIdx, element, cv::Point(-1, -1), 1, 0, cv::Scalar(0, 0, 0));
+
+    //getUniqueColors(matBodyIdx);
+    //stylize();
     toOf(matBodyIdx, frame);
+
+}
+
+void ofApp::rewriteCode() {
+
+    cv::Mat resized;
+    
+    pointCloud.clear();
+    kinect.setRGB();
+    cv::resize(kinect.rgbImage, resized, cv::Size(512, 424));
+    kinect.setDepth();
+    kinect.setBodyIndex();
+
+    for (size_t y = 0; y < kinect.bodyIndexImage.rows; y++) {
+        for (size_t x = 0; x < kinect.bodyIndexImage.cols; x++) {
+            UINT16 d = kinect.depthImage.at<UINT16>(y, x);
+            uchar bi = kinect.bodyIndexImage.at<uchar>(y, x);
+            if (bi == 255) continue;
+            DepthSpacePoint dp;
+            CameraSpacePoint cp;
+            dp.X = x;
+            dp.Y = y;
+            kinect.coordinateMapper->MapDepthPointToCameraSpace(dp, d, &cp);
+            //cout << y <<" "<< cp.X << ", " << cp.Y << ", " << cp.Z << endl;
+            pointCloud.addVertex(ofVec3f(cp.X * 1000, cp.Y * 1000, cp.Z * 1000));
+            pointCloud.addColor(ofFloatColor(resized.at<cv::Vec3f>(y, x)[0] / 255., resized.at<cv::Vec3f>(y, x)[1] / 255., resized.at<cv::Vec3f>(y, x)[2] / 255.));
+
+            //ColorSpacePoint cp;
+            //DepthSpacePoint dp;
+            //dp.X = x;
+            //dp.Y = y;
+            //kinect.coordinateMapper->MapDepthPointToColorSpace(dp, d, &cp);
+            //int cx = (int)cp.X, cy = (int)cp.Y;
+            //copyRect(matFg, matBg, cx - 2, cy - 2, 4, 4, cx - 2, cy - 2);
+        }
+    }
+    //cv::cvtColor(matBg, matBodyIdx, CV_BGRA2RGB, 3);
+    //cvtTo8Bit(matBodyIdx);
+    //reducePixels(matBodyIdx);
+
+    //int erosion_size = 1;
+    //auto element = cv::getStructuringElement(cv::MORPH_CROSS,
+    //    cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
+    //    cv::Point(erosion_size, erosion_size));
+    //cv::erode(matBodyIdx, matBodyIdx, element, cv::Point(-1, -1), 1, 0, cv::Scalar(0, 0, 0));
+
+    //getUniqueColors(matBodyIdx);
+    //stylize();
+    //toOf(matBodyIdx, frame);
 
 }
 
@@ -107,7 +198,7 @@ void ofApp::stylize() {
 void ofApp::cvtTo8Bit(cv::Mat& img) {
     //TODO: set palette
     for (int i = 0; i < img.rows; i++) {
-        for (int j = 0; j < img.cols; j++) {
+        for (int j = 0; j < img.cols; j++) {            
             img.at<cv::Vec3b>(i, j)[0] = (img.at<cv::Vec3b>(i, j)[0] >> 6) << 6;
             img.at<cv::Vec3b>(i, j)[1] = (img.at<cv::Vec3b>(i, j)[1] >> 6) << 6;
             img.at<cv::Vec3b>(i, j)[2] = (img.at<cv::Vec3b>(i, j)[2] >> 5) << 5;
@@ -187,24 +278,43 @@ void ofApp::drawTextureAtRowAndColumn(const std::string& title, const ofTexture&
 #pragma region ofApp
 //--------------------------------------------------------------
 void ofApp::setup() {
+
+    ofSetFrameRate(60);
+    ofBackground(ofColor::black);
+    ofSetBackgroundAuto(true);
+    ofSetVerticalSync(true);
+    ofEnableDepthTest();
+
     gui.setup();
     gui.add(edgeThresh1.setup("edgeThresh1", 60, 1, 500));
     gui.add(edgeThresh2.setup("edgeThresh2", 100, 1, 500));
+
 }
 
 //--------------------------------------------------------------
 void ofApp::update() {
     //updateDepth();
 
-    updateRGB();
+    //updateRGB();
 
     //updateBodyIdx();
+
+    rewriteCode();
 }
 
 //--------------------------------------------------------------
 void ofApp::draw() {
-    drawTextureAtRowAndColumn("Kinect", frame.getTexture(), 0, 0);
-    gui.draw();
+    light.enable();
+    cam.begin();
+    ofDrawCylinder(10,20);
+    if (pointCloud.getNumVertices() > 0)
+        pointCloud.drawVertices();
+    cam.end();
+    light.disable();
+
+
+    //drawTextureAtRowAndColumn("Kinect", frame.getTexture(), 0, 0);
+    //gui.draw();
 }
 
 //--------------------------------------------------------------

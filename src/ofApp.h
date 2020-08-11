@@ -4,6 +4,7 @@
 #include "ofxGui.h"
 #include "ofxOpenCv.h"
 
+//#define USE_FACE
 #include "NtKinect.h"
 
 class ofApp : public ofBaseApp{
@@ -27,14 +28,19 @@ class ofApp : public ofBaseApp{
 
 	ofImage frame;
 
+	ofLight light;
+	ofEasyCam cam;
+	ofVboMesh pointCloud;
+
 	ofxIntSlider edgeThresh1, edgeThresh2;
 	ofxPanel panel, gui;
 
 	void updateDepth();
 	void updateRGB();
 	void updateBodyIdx();
-	void stylize();
+	void rewriteCode();
 
+	void stylize();
 	void cvtTo8Bit(cv::Mat& img);
 	void reducePixels(cv::Mat& img);
 	void toOf(const cv::Mat& src, ofImage& img);

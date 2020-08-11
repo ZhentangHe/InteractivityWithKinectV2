@@ -9,8 +9,13 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(KINECTSDK20_DIR)Lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>kinect20.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Kinect20.lib;Kinect20.Face.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /e /i /y "$(ProjectDir)..\..\..\export\vs\*.dll" "$(ProjectDir)bin"
+xcopy "$(KINECTSDK20_DIR)Redist\Face\x64\NuiDatabase" "$(TargetDir)NuiDatabase" /e /y /i /r
+xcopy "$(KINECTSDK20_DIR)Redist\Face\x64\Kinect20.Face.dll" "$(TargetDir)" /c /y</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup />
 </Project>
