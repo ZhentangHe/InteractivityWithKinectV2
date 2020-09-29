@@ -101,50 +101,60 @@ void ofApp::updateBodyIdx() {
 
 }
 
-void ofApp::rewriteCode() {
+void ofApp::updatePointCloud() {
 
-    cv::Mat resized;    
+    cv::Mat resized;
     pointCloud.clear();
+    pointCloud.setMode(OF_PRIMITIVE_LINES);
+    pointCloud.enableIndices();
+    //triangle.clear();
     kinect.setRGB();
-    matRGB = kinect.rgbImage.clone();
+    matBGR = kinect.rgbImage.clone();//8UC4
     kinect.setDepth();
     kinect.setBodyIndex();
-    cv::resize(kinect.rgbImage, resized, cv::Size(kinect.bodyIndexImage.rows, kinect.bodyIndexImage.cols));
-
-    for (size_t y = 0; y < kinect.bodyIndexImage.rows; y++) {
-        for (size_t x = 0; x < kinect.bodyIndexImage.cols; x++) {
-            UINT16 d = kinect.depthImage.at<UINT16>(y, x);
-            uchar bi = kinect.bodyIndexImage.at<uchar>(y, x);
-            if (bi == 255) continue;
-            DepthSpacePoint dp;
-            CameraSpacePoint cp;
-            dp.X = x;
-            dp.Y = y;
-            kinect.coordinateMapper->MapDepthPointToCameraSpace(dp, d, &cp);
-            pointCloud.addVertex(ofVec3f(cp.X * 1000, cp.Y * 1000, cp.Z * -1000));
-            //TODO: need extra vector to store original indices
-            //sth is wrong, need to determine indices
-            //pointCloud.addColor(ofFloatColor(resized.at<cv::Vec3f>(y, x)[0] / 255., resized.at<cv::Vec3f>(y, x)[1] / 255., resized.at<cv::Vec3f>(y, x)[2] / 255.));
-            //cout << resized.at<cv::Vec3f>(y, x)[0] << ", "
-            //    << resized.at<cv::Vec3f>(y, x)[1] << ", "
-            //    << resized.at<cv::Vec3f>(y, x)[2] << endl;
+    cv::resize(kinect.rgbImage, resized, cv::Size(kinect.bodyIndexImage.cols, kinect.bodyIndexImage.rows));
+    const int stride = 3;
+    for (size_t y = 0; y < kinect.bodyIndexImage.rows; y += stride) {
+        for (size_t x = 0; x < kinect.bodyIndexImage.cols; x += stride) {
+            UINT16 depth = kinect.depthImage.at<UINT16>(y, x);
+            if (kinect.bodyIndexImage.at<uchar>(y, x) == 255)
+                continue;
+            DepthSpacePoint dep;
+            CameraSpacePoint cap;
+            ColorSpacePoint cop;
+            dep.X = x;
+            dep.Y = y;
+            kinect.coordinateMapper->MapDepthPointToCameraSpace(dep, depth, &cap);
+            kinect.coordinateMapper->MapDepthPointToColorSpace(dep, depth, &cop);
+            if (cap.X != -std::numeric_limits<float>::infinity()) {
+                int cx = CLAMP((int)cop.X, 0, matBGR.cols - 1);
+                int cy = CLAMP((int)cop.Y, 0, matBGR.rows - 1);
+                //ofFloatColor c(
+                //    matBGR.at<cv::Vec4b>(cy, cx)[2] / 255.,
+                //    matBGR.at<cv::Vec4b>(cy, cx)[1] / 255.,
+                //    matBGR.at<cv::Vec4b>(cy, cx)[0] / 255.);
+                //c.setSaturation(0.7);
+                pointCloud.addColor(ofFloatColor(
+                    matBGR.at<cv::Vec4b>(cy, cx)[2] / 255.,
+                    matBGR.at<cv::Vec4b>(cy, cx)[1] / 255.,
+                    matBGR.at<cv::Vec4b>(cy, cx)[0] / 255.));
+                pointCloud.addVertex(ofVec3f(cap.X * 1000, cap.Y * 1000, cap.Z * -1000));
+            }
         }
     }
-
-    //for (size_t y = 0; y < kinect.bodyIndexImage.rows; y++) {
-    //    for (size_t x = 0; x < kinect.bodyIndexImage.cols; x++) {
-    //        UINT16 d = kinect.depthImage.at<UINT16>(y, x);
-    //        uchar bi = kinect.bodyIndexImage.at<uchar>(y, x);
-    //        if (bi == 255) continue;
-    //        if (x % 2 == 0) {
-    //            pointCloud.addIndex(0);
-    //        }
-    //        else {
-
-    //        }
-    //    }
-    //}
-
+    int numVerts = pointCloud.getNumVertices();
+    for (int a = 0; a < numVerts; ++a) {
+        ofVec3f verta = pointCloud.getVertex(a);
+        for (int b = a + 1; b < numVerts; ++b) {
+            ofVec3f vertb = pointCloud.getVertex(b);
+            float dist = verta.distance(vertb);
+            if (dist <= connectionDist) {
+                pointCloud.addIndex(a);
+                pointCloud.addIndex(b);
+            }
+        }
+    }
+    //triangle.triangulate(pointCloud.getVertices());
 }
 
 void ofApp::stylize() {
@@ -282,9 +292,11 @@ void ofApp::setup() {
     ofSetVerticalSync(true);
     ofEnableDepthTest();
 
+    shader.load("toonshader");
+
     gui.setup();
-    gui.add(edgeThresh1.setup("edgeThresh1", 60, 1, 500));
-    gui.add(edgeThresh2.setup("edgeThresh2", 100, 1, 500));
+    gui.setBackgroundColor(ofColor::antiqueWhite);
+    gui.add(connectionDist.setup("connectionDist", 22, 0, 30));
 
 }
 
@@ -296,21 +308,22 @@ void ofApp::update() {
 
     //updateBodyIdx();
 
-    rewriteCode();
+    updatePointCloud();
+
 }
 
 //--------------------------------------------------------------
 void ofApp::draw() {
     light.enable();
     cam.begin();
+    //shader.begin();
     if (pointCloud.getNumVertices() > 0)
         pointCloud.drawWireframe();
+    //shader.end();
     cam.end();
     light.disable();
 
-
-    //drawTextureAtRowAndColumn("Kinect", frame.getTexture(), 0, 0);
-    //gui.draw();
+    gui.draw();
 }
 
 //--------------------------------------------------------------

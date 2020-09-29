@@ -3,8 +3,9 @@
 #include "ofMain.h"
 #include "ofxGui.h"
 #include "ofxOpenCv.h"
-
+#include "ofxTriangle.h"
 //#define USE_FACE
+#define USE_AUDIO
 #include "NtKinect.h"
 
 class ofApp : public ofBaseApp{
@@ -24,6 +25,7 @@ class ofApp : public ofBaseApp{
 
 	cv::Mat matGray;
 	cv::Mat matRGB;
+	cv::Mat matBGR;
 	cv::Mat matBodyIdx;
 
 	ofImage frame;
@@ -31,14 +33,16 @@ class ofApp : public ofBaseApp{
 	ofLight light;
 	ofEasyCam cam;
 	ofVboMesh pointCloud;
+	ofShader shader;
+	//ofxTriangle triangle;
 
-	ofxIntSlider edgeThresh1, edgeThresh2;
+	ofxIntSlider connectionDist, edgeThresh1, edgeThresh2;
 	ofxPanel panel, gui;
 
 	void updateDepth();
 	void updateRGB();
 	void updateBodyIdx();
-	void rewriteCode();
+	void updatePointCloud();
 
 	void stylize();
 	void cvtTo8Bit(cv::Mat& img);
