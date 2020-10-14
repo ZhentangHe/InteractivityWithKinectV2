@@ -64,15 +64,6 @@
     <ClCompile Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxOpenCv\src\ofxCvShortImage.cpp">
       <Filter>addons\ofxOpenCv\src</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\src\ofxTriangle.cpp">
-      <Filter>addons\ofxTriangle\src</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\src\assert.cpp">
-      <Filter>addons\ofxTriangle\libs\Triangle\src</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\src\del_impl.cpp">
-      <Filter>addons\ofxTriangle\libs\Triangle\src</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="src">
@@ -227,24 +218,6 @@
     </Filter>
     <Filter Include="addons\ofxOpenCv\libs\opencv\include\opencv2\videoio\legacy">
       <UniqueIdentifier>{01B554B2-7143-F97F-EB04-9763}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="addons\ofxTriangle">
-      <UniqueIdentifier>{5022B525-DC44-62DB-C6DC-E5B7}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="addons\ofxTriangle\src">
-      <UniqueIdentifier>{A39671D4-7836-AAD1-3819-6B9E}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="addons\ofxTriangle\libs">
-      <UniqueIdentifier>{8C033656-5D23-37AD-C9B5-3FBB}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="addons\ofxTriangle\libs\Triangle">
-      <UniqueIdentifier>{26C85C73-63C8-4707-B4BD-311B}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="addons\ofxTriangle\libs\Triangle\include">
-      <UniqueIdentifier>{24914463-C9EB-63EA-6876-FE9B}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="addons\ofxTriangle\libs\Triangle\src">
-      <UniqueIdentifier>{61FDF887-DF14-A75E-74E5-0498}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -1172,25 +1145,10 @@
     <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxOpenCv\libs\opencv\include\opencv2\world.hpp">
       <Filter>addons\ofxOpenCv\libs\opencv\include\opencv2</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\src\ofxTriangle.h">
-      <Filter>addons\ofxTriangle\src</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\include\assert.hpp">
-      <Filter>addons\ofxTriangle\libs\Triangle\include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\include\del_interface.hpp">
-      <Filter>addons\ofxTriangle\libs\Triangle\include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\include\dpoint.hpp">
-      <Filter>addons\ofxTriangle\libs\Triangle\include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\include\triangle.h">
-      <Filter>addons\ofxTriangle\libs\Triangle\include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\include\triangle_impl.hpp">
-      <Filter>addons\ofxTriangle\libs\Triangle\include</Filter>
-    </ClInclude>
     <ClInclude Include="src\WaveFile.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\delaunator.hpp">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

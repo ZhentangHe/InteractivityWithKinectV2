@@ -203,11 +203,9 @@
     <ClCompile Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxOpenCv\src\ofxCvHaarFinder.cpp" />
     <ClCompile Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxOpenCv\src\ofxCvImage.cpp" />
     <ClCompile Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxOpenCv\src\ofxCvShortImage.cpp" />
-    <ClCompile Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\src\ofxTriangle.cpp" />
-    <ClCompile Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\src\assert.cpp" />
-    <ClCompile Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\src\del_impl.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\delaunator.hpp" />
     <ClInclude Include="src\ofApp.h" />
     <ClInclude Include="src\NtKinect.h" />
     <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxGui\src\ofxBaseGui.h" />
@@ -515,12 +513,6 @@
     <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxOpenCv\libs\opencv\include\opencv2\videoio\videoio_c.h" />
     <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxOpenCv\libs\opencv\include\opencv2\videoio.hpp" />
     <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxOpenCv\libs\opencv\include\opencv2\world.hpp" />
-    <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\src\ofxTriangle.h" />
-    <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\include\assert.hpp" />
-    <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\include\del_interface.hpp" />
-    <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\include\dpoint.hpp" />
-    <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\include\triangle.h" />
-    <ClInclude Include="..\..\..\..\..\Tools\of_v0.11.0_vs2017_release\addons\ofxTriangle\libs\Triangle\include\triangle_impl.hpp" />
     <ClInclude Include="src\WaveFile.h" />
   </ItemGroup>
   <ItemGroup>

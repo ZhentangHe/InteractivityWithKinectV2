@@ -1,124 +1,137 @@
 #include "ofApp.h"
 
-#pragma region Update
-// convert full 16-bits depth range to 8 bits
-// use setDepth(false) for this to work
-void ofApp::updateDepth() {
-
-    kinect.setDepth(false);//mapped to the luminance of the black and white image 
-                           //of 0 (black) to 65535 (white) with the distance of 0 mm to 4500 mm.
-    
-    kinect.depthImage.convertTo(matGray, CV_8UC1, 255. / 4500.);
-    //kinect.depthImage.convertTo(matGray, CV_8UC1, 1. / 257.);
-    toOf(matGray, frame);
-}
-
-//This function converts a BGRA mat into an ofImage.
-//Use NtKinect::setRGB() for this to work.
-void ofApp::updateRGB() {
-
-    kinect.setRGB();
-    cv::cvtColor(kinect.rgbImage, matRGB, CV_BGRA2RGB, 3);
-    cvtTo8Bit(matRGB);
-    //colorReduce(matRGB);
-    //matRGB = quantizeImage(matRGB, 3);
-    reducePixels(matRGB);
-    stylize();
-    toOf(matRGB, frame);
-
-}
-
-auto getUniqueColors(cv::Mat& img) {
-
-    cv::Mat im;
-    cv::resize(img, im, cv::Size(8, 8));
-    // partition wants a vector, so we need a copy ;(
-    cv::Vec3b* p = im.ptr<cv::Vec3b>();
-    vector<cv::Vec3b> pix(p, p + im.total());
-
-    // now cluster:
-    //vector<int> labels;
-    //int unique = cv::partition(pix, labels,
-    //    [](auto a, auto b) { return a == b; });
-    //    [](auto a, auto b) { return cv::norm(a, b) < 32; });
-
-    sort(pix.begin(), pix.end(), [](auto a, auto b) {
-        if (a[0] == b[0])
-            if (a[1] == b[1])
-                return a[2] < b[2];
-            else return a[1] < b[1];
-        else return a[0] < b[0]; });
-
-    pix.erase(unique(pix.begin(), pix.end()), pix.end());
-
-    return pix;
-
-    // debug output
-    //cv::Mat lm = cv::Mat(labels).reshape(1, im.rows);
-    //cout << lm << endl;
-    //cout << unique << " unique colors" << endl;
-}
-
-//This function converts a BGRA mat into an ofImage.
-//Use NtKinect::setRGB() and NtKinect::setBodyIndex() for this to work.
-void ofApp::updateBodyIdx() {
-
-    cv::Mat matBg, matFg;
-
-    kinect.setRGB();
-    cv::cvtColor(kinect.rgbImage, matFg, cv::COLOR_BGRA2BGR);
-    matBg = cv::Mat::zeros(kinect.rgbImage.rows, kinect.rgbImage.cols, CV_8UC3);
-    kinect.setDepth();
-    kinect.setBodyIndex();
-    for (size_t y = 0; y < kinect.bodyIndexImage.rows; y++) {
-        for (size_t x = 0; x < kinect.bodyIndexImage.cols; x++) {
-            UINT16 d = kinect.depthImage.at<UINT16>(y, x);
-            uchar bi = kinect.bodyIndexImage.at<uchar>(y, x);
-            if (bi == 255) continue;
-            ColorSpacePoint cp;
-            DepthSpacePoint dp;
-            dp.X = x;
-            dp.Y = y;
-            kinect.coordinateMapper->MapDepthPointToColorSpace(dp, d, &cp);
-            int cx = (int)cp.X, cy = (int)cp.Y;
-            copyRect(matFg, matBg, cx - 2, cy - 2, 4, 4, cx - 2, cy - 2);
-        }
+cv::Mat createLUT(int numColors) {
+    // When numColors=1 the LUT will only have 1 color which is black.
+    if (numColors < 0) {
+        numColors = 1;
+    }
+    if (numColors > 256) {
+        numColors = 256;
     }
 
-    cv::cvtColor(matBg, matBodyIdx, CV_BGRA2RGB, 3);
-    cvtTo8Bit(matBodyIdx);
-    reducePixels(matBodyIdx);
+    cv::Mat lookupTable = cv::Mat::zeros(cv::Size(1, 256), CV_8UC1);
 
-    //int erosion_size = 1;
-    //auto element = cv::getStructuringElement(cv::MORPH_CROSS,
-    //    cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
-    //    cv::Point(erosion_size, erosion_size));
-    //cv::erode(matBodyIdx, matBodyIdx, element, cv::Point(-1, -1), 1, 0, cv::Scalar(0, 0, 0));
+    int startIdx = 0;
+    for (size_t x = 0; x < 256; x += 256.0 / numColors) {
+        lookupTable.at<uchar>(0, x) = x;
 
-    //getUniqueColors(matBodyIdx);
-    //stylize();
-    toOf(matBodyIdx, frame);
+        for (size_t y = startIdx; y < x; y++) {
+            if (lookupTable.at<uchar>(0, y) == 0) {
+                lookupTable.at<uchar>(0, y) = lookupTable.at<uchar>(0, x);
+            }
+        }
+        startIdx = x;
+    }
+    return lookupTable;
+}
+
+void reduceColors(const cv::Mat& src, cv::Mat& dst, int numRed, int numGreen, int numBlue) {
+    cv::Mat redLUT = createLUT(numRed);
+    cv::Mat greenLUT = createLUT(numGreen);
+    cv::Mat blueLUT = createLUT(numBlue);
+    vector<cv::Mat> channels(3);
+    split(src, channels);
+    LUT(channels[0], blueLUT, channels[0]);
+    LUT(channels[1], greenLUT, channels[1]);
+    LUT(channels[2], redLUT, channels[2]);
+    merge(channels, dst);
+}
+
+void cartoon(const cv::Mat& src, cv::Mat& dst, int numRed, int numGreen, int numBlue) {
+    cv::Mat imgReduced, img;
+    cvtColor(src, img, cv::COLOR_BGRA2BGR);
+    reduceColors(img, imgReduced, numRed, numGreen, numBlue);
+    cvtColor(img, dst, cv::COLOR_BGR2GRAY);
+    medianBlur(dst, dst, 15);
+    adaptiveThreshold(dst, dst, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 19, 5);
+    cvtColor(dst, dst, cv::COLOR_GRAY2BGR);
+    bitwise_and(imgReduced, dst, dst);
+}
+
+//deprecated
+//void cartoonify(const cv::Mat& imgBGRA, cv::Mat& imgCartoon) {
+//
+//    int num_down = 2, //number of downsampling steps
+//        num_bilateral = 1; //number of bilateral filtering steps
+//    cv::Mat imgColor, imgGray, imgBlur, imgEdge;
+//    
+//    //downsample image using Gaussian pyramid
+//    cv::cvtColor(imgBGRA, imgColor, cv::COLOR_BGRA2BGR);
+//    for (size_t i = 0; i < num_down; i++) {
+//        cv::pyrDown(imgColor, imgColor);
+//        //repeatedly apply small bilateral filter instead of
+//        //applying one large filter
+//        for (size_t j = 0; j < num_bilateral; j++) {
+//            cv::edgePreservingFilter(imgColor, imgColor);
+//            //cv::Mat tmp = imgColor.clone();
+//            //cv::bilateralFilter(tmp, imgColor, 9, 9, 7);
+//            //upsample image to original size
+//            for (size_t k = 0; k < num_down; k++) {
+//                cv::pyrUp(imgColor, imgColor);
+//            }
+//        }
+//    }
+//
+//    //convert to grayscaleand apply median blur
+//    cv::cvtColor(imgBGRA, imgGray, cv::COLOR_BGRA2GRAY);
+//    cv::medianBlur(imgGray, imgBlur, 7);
+//
+//    //detectand enhance edges
+//    cv::adaptiveThreshold(imgBlur, imgEdge, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 9, 2);
+//
+//    //convert back to color, bit - AND with color image
+//    //cv::cvtColor(imgEdge, imgEdge, cv::COLOR_GRAY2BGR);
+//    //cv::bitwise_and(imgColor, imgColor, imgCartoon, imgEdge);
+//    //imgCartoon = imgColor.clone();
+//    //imgCartoon.setTo(cv::Scalar(0, 0, 0), ~imgEdge);
+//
+//    imgCartoon = imgColor.clone();
+//
+//}
+
+//--------------------------------------------------------------
+void ofApp::setup() {
+
+    ofSetFrameRate(30);
+    ofBackground(ofColor::black);
+    ofSetBackgroundAuto(true);
+    ofSetVerticalSync(true);
+    ofEnableDepthTest();
+
+    light.setPosition(lightDir);
+    shader.load("toonshader");
 
 }
 
-void ofApp::updatePointCloud() {
-
-    cv::Mat resized;
+//--------------------------------------------------------------
+void ofApp::update() {
+    //cv::Mat resized;
     pointCloud.clear();
-    pointCloud.setMode(OF_PRIMITIVE_LINES);
+    pointCloud.setMode(OF_PRIMITIVE_TRIANGLES);
     pointCloud.enableIndices();
-    //triangle.clear();
     kinect.setRGB();
-    matBGR = kinect.rgbImage.clone();//8UC4
+    cartoon(kinect.rgbImage, matBGR, 96, 96, 64);
+    //cv::cvtColor(kinect.rgbImage, matBGR, cv::COLOR_BGRA2BGR);
+    //int dilation_size = 7;
+    //cv::Mat element = cv::getStructuringElement(cv::MORPH_DILATE,
+    //    cv::Size(2 * dilation_size + 1, 2 * dilation_size + 1),
+    //    cv::Point(dilation_size, dilation_size));
+    //cv::dilate(matBGR, matBGR, element);
     kinect.setDepth();
     kinect.setBodyIndex();
-    cv::resize(kinect.rgbImage, resized, cv::Size(kinect.bodyIndexImage.cols, kinect.bodyIndexImage.rows));
-    const int stride = 3;
+    //cv::resize(kinect.rgbImage, resized, cv::Size(kinect.bodyIndexImage.cols, kinect.bodyIndexImage.rows));
+    coords.resize(0);
+    vector<vector<size_t>> indices(kinect.bodyIndexImage.rows, vector<size_t>(kinect.bodyIndexImage.cols, 0));
+    const int stride = 4;
+    int idxCounter = 0;
     for (size_t y = 0; y < kinect.bodyIndexImage.rows; y += stride) {
         for (size_t x = 0; x < kinect.bodyIndexImage.cols; x += stride) {
             UINT16 depth = kinect.depthImage.at<UINT16>(y, x);
             if (kinect.bodyIndexImage.at<uchar>(y, x) == 255)
                 continue;
+            coords.push_back(y);
+            coords.push_back(x);
+            indices[y][x] = idxCounter++;
             DepthSpacePoint dep;
             CameraSpacePoint cap;
             ColorSpacePoint cop;
@@ -129,201 +142,86 @@ void ofApp::updatePointCloud() {
             if (cap.X != -std::numeric_limits<float>::infinity()) {
                 int cx = CLAMP((int)cop.X, 0, matBGR.cols - 1);
                 int cy = CLAMP((int)cop.Y, 0, matBGR.rows - 1);
-                //ofFloatColor c(
-                //    matBGR.at<cv::Vec4b>(cy, cx)[2] / 255.,
-                //    matBGR.at<cv::Vec4b>(cy, cx)[1] / 255.,
-                //    matBGR.at<cv::Vec4b>(cy, cx)[0] / 255.);
-                //c.setSaturation(0.7);
                 pointCloud.addColor(ofFloatColor(
-                    matBGR.at<cv::Vec4b>(cy, cx)[2] / 255.,
-                    matBGR.at<cv::Vec4b>(cy, cx)[1] / 255.,
-                    matBGR.at<cv::Vec4b>(cy, cx)[0] / 255.));
+                    matBGR.at<cv::Vec3b>(cy, cx)[2] / 255.,
+                    matBGR.at<cv::Vec3b>(cy, cx)[1] / 255.,
+                    matBGR.at<cv::Vec3b>(cy, cx)[0] / 255.));
                 pointCloud.addVertex(ofVec3f(cap.X * 1000, cap.Y * 1000, cap.Z * -1000));
             }
         }
     }
-    int numVerts = pointCloud.getNumVertices();
-    for (int a = 0; a < numVerts; ++a) {
-        ofVec3f verta = pointCloud.getVertex(a);
-        for (int b = a + 1; b < numVerts; ++b) {
-            ofVec3f vertb = pointCloud.getVertex(b);
-            float dist = verta.distance(vertb);
-            if (dist <= connectionDist) {
-                pointCloud.addIndex(a);
-                pointCloud.addIndex(b);
+
+    shader.setUniform3f("lightDir", lightDir);
+    //OF_PRIMITIVE_TRIANGLES
+    const float threshold = 100;
+    normals.resize(pointCloud.getNumVertices());
+    if (pointCloud.getNumVertices() > 0) {
+        delaunator::Delaunator d(coords);
+        for (size_t i = 0; i < d.triangles.size(); i += 3) {
+            size_t tx0 = d.coords[2 * d.triangles[i]],
+                ty0 = d.coords[2 * d.triangles[i] + 1],
+                tx1 = d.coords[2 * d.triangles[i + 1]],
+                ty1 = d.coords[2 * d.triangles[i + 1] + 1],
+                tx2 = d.coords[2 * d.triangles[i + 2]],
+                ty2 = d.coords[2 * d.triangles[i + 2] + 1];
+            if (ofDistSquared(tx0, ty0, tx1, ty1) < threshold
+                && ofDistSquared(tx1, ty1, tx2, ty2) < threshold
+                && ofDistSquared(tx2, ty2, tx0, ty0) < threshold) {
+                //cout << indices[tx0][ty0] << ", " << indices[tx1][ty1] << ", " << indices[tx2][ty2] << endl;
+                pointCloud.addIndex(indices[tx0][ty0]);
+                pointCloud.addIndex(indices[tx1][ty1]);
+                pointCloud.addIndex(indices[tx2][ty2]);
+
+
+                ofVec3f v0 = pointCloud.getVertex(indices[tx0][ty0]),
+                    v1 = pointCloud.getVertex(indices[tx1][ty1]),
+                    v2 = pointCloud.getVertex(indices[tx2][ty2]);
+
+                ofVec3f U = v1 - v0,
+                    V = v2 - v0;
+
+                ofVec3f normal((U.y * V.z) - (U.z * V.y), (U.z * V.x) - (U.x * V.z), (U.x * V.y) - (U.y * V.x));
+
+                normal.normalize();
+
+                normals[indices[tx0][ty0]] = normal;
+                normals[indices[tx1][ty1]] = normal;
+                normals[indices[tx2][ty2]] = normal;
             }
         }
-    }
-    //triangle.triangulate(pointCloud.getVertices());
-}
-
-void ofApp::stylize() {
-
-    //1. simple canny
-
-    cv::Mat gray, dst, detected_edges, addweight;
-    cv::cvtColor(matRGB, gray, cv::COLOR_RGB2GRAY);
-    blur(gray, gray, cv::Size(3, 3));
-    Canny(gray, detected_edges, edgeThresh1, edgeThresh2, 3);
-    
-    dst = cv::Scalar::all(0);
-    
-    matRGB.copyTo(dst, detected_edges); // copy part of src image according the canny output, canny is used as mask
-    cvtColor(detected_edges, detected_edges, CV_GRAY2BGR); // convert canny image to bgr
-    addWeighted(matRGB, 0.5, detected_edges, 0.5, 0.0, addweight); // blend src image with canny image
-    matRGB += detected_edges; // add src image with canny image
-    
-    addweight.copyTo(matRGB);
-
-    //2. taking too much time
-
-    //cv::Mat segmented, gray, edges, edgesRgb;
-    //cv::pyrMeanShiftFiltering(matRGB, segmented, 15, 40);
-    //cv::cvtColor(segmented, gray, cv::COLOR_RGB2GRAY);
-    //cv::Canny(gray, edges, 150, 150);
-    //cv::cvtColor(edges, edgesRgb, cv::COLOR_GRAY2RGB);
-    //matRGB -= edgesRgb;
-
-    //3. similar to Bilateral Filtering but faster (still slow for 1080p 60fps)
-
-    //cv::edgePreservingFilter(matRGB, matRGB, cv::RECURS_FILTER);
-
-    //4. stylization (very slow)
-
-    //cv::stylization(matRGB, matRGB);
-
-    //5. pencil sketch (little bit latency)
-
-    //cv::pencilSketch(matRGB, matGray, matRGB);
-
-}
-
-#pragma endregion
-
-#pragma region Utils
-//This function converts an image into 8 bit truecolor(RRRGGGBB).
-void ofApp::cvtTo8Bit(cv::Mat& img) {
-    //TODO: set palette
-    for (int i = 0; i < img.rows; i++) {
-        for (int j = 0; j < img.cols; j++) {            
-            img.at<cv::Vec3b>(i, j)[0] = (img.at<cv::Vec3b>(i, j)[0] >> 6) << 6;
-            img.at<cv::Vec3b>(i, j)[1] = (img.at<cv::Vec3b>(i, j)[1] >> 6) << 6;
-            img.at<cv::Vec3b>(i, j)[2] = (img.at<cv::Vec3b>(i, j)[2] >> 5) << 5;
-        }
-    }
-}
-
-//This function scale an image down and up.
-void ofApp::reducePixels(cv::Mat& img) {
-
-    cv::resize(img, img, cv::Size(width / 2, height / 2), CV_INTER_LINEAR);
-    cv::resize(img, img, cv::Size(width, height), CV_INTER_NN);
-}
-
-//This function converts a RGB-Mat to corresponding ofImage.
-void ofApp::toOf(const cv::Mat& src, ofImage& img) {
-
-    ofPixels pix;
-    pix.setFromExternalPixels(src.data, src.cols, src.rows, src.channels());
-    img.setFromPixels(pix);
-    img.update();
-}
-
-void ofApp::copyRect(cv::Mat& src, cv::Mat& dst, int sx, int sy, int w, int h, int dx, int dy) {
-    if (sx + w < 0 || sx >= src.cols || sy + h < 0 || sy >= src.rows) return;
-    if (sx < 0) { w += sx; dx -= sx; sx = 0; }
-    if (sx + w > src.cols) w = src.cols - sx;
-    if (sy < 0) { h += sy; dy -= sy; sy = 0; }
-    if (sy + h > src.rows) h = src.rows - sy;
-
-    if (dx + w < 0 || dx >= dst.cols || dy + h < 0 || dy >= dst.rows) return;
-    if (dx < 0) { w += dx; sx -= dx; dx = 0; }
-    if (dx + w > dst.cols) w = dst.cols - dx;
-    if (dy < 0) { h += dy; sy -= dy; dy = 0; }
-    if (dy + h > dst.rows) h = dst.rows - dy;
-
-    cv::Mat roiSrc(src, cv::Rect(sx, sy, w, h));
-    cv::Mat roiDst(dst, cv::Rect(dx, dy, w, h));
-    roiSrc.copyTo(roiDst);
-}
-
-void ofApp::drawTextureAtRowAndColumn(const std::string& title, const ofTexture& tex, int row, int column) {
-    float displayWidth = width / numColumns;
-    float displayHeight = height / numRows;
-
-    ofRectangle targetRectangle(
-        row * displayWidth,
-        column * displayHeight,
-        displayWidth,
-        displayHeight);
-
-    ofNoFill();
-    ofSetColor(ofColor::gray);
-    ofDrawRectangle(targetRectangle);
-
-    ofFill();
-    ofSetColor(255);
-
-    if (tex.isAllocated()) {
-        ofRectangle textureRectangle(0, 0, tex.getWidth(), tex.getHeight());
-
-        // Scale the texture rectangle to its new location and size.
-        textureRectangle.scaleTo(targetRectangle);
-        tex.draw(textureRectangle);
-    }
-    else {
-        ofDrawBitmapStringHighlight("...",
-            targetRectangle.getCenter().x,
-            targetRectangle.getCenter().y);
+        pointCloud.addNormals(normals);
     }
 
-    ofDrawBitmapStringHighlight(title,
-        targetRectangle.getPosition() + glm::vec3(14, 20, 0));
-}
-#pragma endregion
-
-#pragma region ofApp
-//--------------------------------------------------------------
-void ofApp::setup() {
-
-    ofSetFrameRate(60);
-    ofBackground(ofColor::black);
-    ofSetBackgroundAuto(true);
-    ofSetVerticalSync(true);
-    ofEnableDepthTest();
-
-    shader.load("toonshader");
-
-    gui.setup();
-    gui.setBackgroundColor(ofColor::antiqueWhite);
-    gui.add(connectionDist.setup("connectionDist", 22, 0, 30));
-
-}
-
-//--------------------------------------------------------------
-void ofApp::update() {
-    //updateDepth();
-
-    //updateRGB();
-
-    //updateBodyIdx();
-
-    updatePointCloud();
-
+    //OF_PRIMITIVE_LINES
+    //const int connectionDist = 22;
+    //int numVerts = pointCloud.getNumVertices();
+    //for (size_t a = 0; a < numVerts; ++a) {
+    //    ofVec3f verta = pointCloud.getVertex(a);
+    //    for (size_t b = a + 1; b < numVerts; ++b) {
+    //        ofVec3f vertb = pointCloud.getVertex(b);
+    //        float dist = verta.distance(vertb);
+    //        if (dist <= connectionDist) {
+    //            pointCloud.addIndex(a);
+    //            pointCloud.addIndex(b);
+    //        }
+    //    }
+    //}
 }
 
 //--------------------------------------------------------------
 void ofApp::draw() {
+
     light.enable();
     cam.begin();
     //shader.begin();
-    if (pointCloud.getNumVertices() > 0)
-        pointCloud.drawWireframe();
+    if (pointCloud.getNumVertices() > 0) {
+        pointCloud.draw();
+        //pointCloud.drawWireframe();
+    }
     //shader.end();
     cam.end();
     light.disable();
 
-    gui.draw();
 }
 
 //--------------------------------------------------------------
@@ -385,4 +283,3 @@ void ofApp::gotMessage(ofMessage msg) {
 void ofApp::dragEvent(ofDragInfo dragInfo) {
 
 }
-#pragma endregion
